@@ -1,0 +1,99 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+typedef struct {
+    float A;
+    float omega;
+    float sigma;
+    int duration;
+} asignal;
+
+float analog_signal_generator(asignal signal, int t) {
+    return signal.A * sin(signal.omega * t + signal.sigma);
+}
+
+void sampler(float *samples, int interval, asignal signal) {
+    for (int t = 0; t < 1 + signal.duration / interval; t++) {
+        float a = analog_signal_generator(signal, t * interval);
+        samples[t] = a;
+        printf("%f\n", a);
+    }
+}
+
+void quantizer(float *samples, int *pcmpulses, int levels) {
+  float Amin, Amax;
+
+  // Get the minimum and maximum sample values.
+  Amin = samples[0];
+  Amax = samples[0];
+  for (int i = 0; i < levels; i++) {
+    if (samples[i] < Amin) {
+      Amin = samples[i];
+    } else if (samples[i] > Amax) {
+      Amax = samples[i];
+    }
+  }
+  Amax = (int)ceil(Amax);
+  Amin = (int)floor(Amin);
+  printf("%f\n", Amax);
+  printf("%f\n", Amin);
+  // Quantize the samples.
+  for (int i = 0; i < 2 + levels; i++) {
+    float x = samples[i];
+    int q;
+    q = (int)floor((x - Amin) / (Amax - Amin) * levels);
+    printf("%d\n", q);
+    pcmpulses[i] = q;
+  }
+}
+
+void encoder(int *pcmpulses, int *dsignal, int encoderbits) {
+    for (int i = 0; i < 1 + 2 * encoderbits; i++) {
+        int pulse = pcmpulses[i];
+        for (int bit = encoderbits - 1; bit >= 0; bit--) {
+            dsignal[i * encoderbits + bit] = pulse % 2;
+            pulse /= 2;
+        }
+    }
+}
+
+
+
+int main() {
+  // Define the analog signal parameters
+  float A = 3.0;
+  float omega = 2.0;
+  float sigma = 0.0;
+  int duration = 5;
+  int interval = 1;
+  int encoderbits = 2;
+  int levels = pow(2,encoderbits);
+  
+  // Generate the analog signal
+  asignal signal = {A, omega, sigma, duration};
+  float *samples = (float *)malloc(sizeof(float) * (duration / interval));
+  sampler(samples, interval, signal);
+
+  // Quantize the samples
+  int *pcmpulses = (int *)malloc(sizeof(int) * (duration / interval));
+  for (int i = 0; i < duration / interval; i++) {
+    quantizer(samples, pcmpulses, levels);
+  }
+
+  // Encode the quantized values
+  int *dsignal = (int *)malloc(sizeof(int) * (duration / interval));
+  encoder(pcmpulses, dsignal, encoderbits);
+  
+  // Print the pcmpulses array
+  for (int i = 0; i < 2 + 2 * duration / interval; i++) {
+    printf("%d", dsignal[i]);
+  }
+
+  // Free allocated memory
+  free(samples);
+  free(pcmpulses);
+  free(dsignal);
+
+  return 0;
+}
